@@ -12,7 +12,7 @@ import {
 import toast from 'react-hot-toast';
 
 const RequestList = () => {
-  const { currentUser } = useAuth();
+  const { user } = useAuth();
   const [requests, setRequests] = useState([]);
   const [filteredRequests, setFilteredRequests] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState('all');

@@ -13,13 +13,13 @@ import {
 } from 'lucide-react';
 
 const Navbar = () => {
-  const { currentUser, logout } = useAuth();
+  const { user, signOutUser } = useAuth();
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const handleLogout = async () => {
     try {
-      await logout();
+      await signOutUser();
       navigate('/login');
     } catch (error) {
       console.error('Failed to log out:', error);
@@ -32,7 +32,7 @@ const Navbar = () => {
     return 'Student';
   };
 
-  const userRole = currentUser ? getRoleFromEmail(currentUser.email) : 'Student';
+  const userRole = user ? getRoleFromEmail(user.email) : 'Student';
 
   return (
     <div className="navbar bg-base-100 shadow-lg">
@@ -81,12 +81,12 @@ const Navbar = () => {
         <div className="dropdown dropdown-end">
           <div tabIndex={0} role="button" className="btn btn-ghost btn-circle avatar">
             <div className="w-10 rounded-full">
-              <img alt="User" src={currentUser?.photoURL || `https://api.dicebear.com/7.x/initials/svg?seed=${currentUser?.displayName || 'User'}`} />
+              <img alt="User" src={user?.photoURL || `https://api.dicebear.com/7.x/initials/svg?seed=${user?.displayName || 'User'}`} />
             </div>
           </div>
           <ul tabIndex={0} className="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
             <li className="menu-title">
-              <span className="text-sm font-semibold">{currentUser?.displayName}</span>
+                              <span className="text-sm font-semibold">{user?.displayName}</span>
               <span className="text-xs text-gray-500">{userRole}</span>
             </li>
             <li><Link to="/profile"><User size={16} /> Profile</Link></li>

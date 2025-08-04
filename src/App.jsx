@@ -13,9 +13,9 @@ import AdminAnalytics from './components/Admin/AdminAnalytics';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
-  const { currentUser } = useAuth();
+  const { user } = useAuth();
   
-  if (!currentUser) {
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
   
@@ -24,14 +24,14 @@ const ProtectedRoute = ({ children }) => {
 
 // Admin Route Component
 const AdminRoute = ({ children }) => {
-  const { currentUser } = useAuth();
+  const { user } = useAuth();
   
-  if (!currentUser) {
+  if (!user) {
     return <Navigate to="/login" replace />;
   }
   
   // Check if user is admin (you can modify this logic based on your needs)
-  const isAdmin = currentUser.email.includes('admin');
+  const isAdmin = user.email.includes('admin');
   
   if (!isAdmin) {
     return <Navigate to="/dashboard" replace />;

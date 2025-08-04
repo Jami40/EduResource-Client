@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 const Dashboard = () => {
-  const { currentUser } = useAuth();
+  const { user } = useAuth();
   const [stats, setStats] = useState({
     totalResources: 45,
     availableResources: 32,
@@ -28,7 +28,7 @@ const Dashboard = () => {
     return 'Student';
   };
 
-  const userRole = currentUser ? getRoleFromEmail(currentUser.email) : 'Student';
+  const userRole = user ? getRoleFromEmail(user.email) : 'Student';
 
   const recentRequests = [
     {
@@ -87,7 +87,7 @@ const Dashboard = () => {
     <div className="p-6">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900">
-          Welcome back, {currentUser?.displayName || 'User'}!
+          Welcome back, {user?.displayName || 'User'}!
         </h1>
         <p className="text-gray-600 mt-2">
           Here's what's happening with your departmental resources today.
