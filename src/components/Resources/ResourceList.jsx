@@ -9,69 +9,33 @@ const ResourceList = () => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Mock data - replace with API call
+  // Fetch resources from server
   useEffect(() => {
-    const mockResources = [
-      {
-        id: 1,
-        name: 'Projector Epson EX3260',
-        category: 'Electronics',
-        status: 'available',
-        location: 'Room 101',
-        description: 'High-quality projector for presentations and lectures',
-        image: 'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=300&h=200&fit=crop'
-      },
-      {
-        id: 2,
-        name: 'Laptop Dell XPS 13',
-        category: 'Computers',
-        status: 'available',
-        location: 'IT Department',
-        description: 'Premium laptop for research and development work',
-        image: 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=300&h=200&fit=crop'
-      },
-      {
-        id: 3,
-        name: 'Microscope Olympus',
-        category: 'Lab Equipment',
-        status: 'checked-out',
-        location: 'Biology Lab',
-        description: 'Advanced microscope for biological research',
-        image: 'https://images.unsplash.com/photo-1576086213369-97a306d36557?w=300&h=200&fit=crop'
-      },
-      {
-        id: 4,
-        name: 'Whiteboard Marker Set',
-        category: 'Stationery',
-        status: 'available',
-        location: 'Storage Room',
-        description: 'Complete set of whiteboard markers in various colors',
-        image: 'https://images.unsplash.com/photo-1586953208448-b95a79798f07?w=300&h=200&fit=crop'
-      },
-      {
-        id: 5,
-        name: '3D Printer Ultimaker',
-        category: 'Lab Equipment',
-        status: 'maintenance',
-        location: 'Engineering Lab',
-        description: 'Professional 3D printer for prototyping',
-        image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=300&h=200&fit=crop'
-      },
-      {
-        id: 6,
-        name: 'Camera Canon EOS R5',
-        category: 'Electronics',
-        status: 'available',
-        location: 'Media Center',
-        description: 'Professional camera for photography and videography',
-        image: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=300&h=200&fit=crop'
+    const fetchResources = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const response = await fetch('http://localhost:3000/resources');
+        if (!response.ok) {
+          throw new Error('Failed to fetch resources');
+        }
+        
+        const data = await response.json();
+        setResources(data);
+        setFilteredResources(data);
+      } catch (err) {
+        console.error('Failed to load resources:', err);
+        setError('Failed to load resources. Please try again later.');
+        toast.error('Failed to load resources');
+      } finally {
+        setLoading(false);
       }
-    ];
+    };
 
-    setResources(mockResources);
-    setFilteredResources(mockResources);
-    setLoading(false);
+    fetchResources();
   }, []);
 
   useEffect(() => {
@@ -80,8 +44,8 @@ const ResourceList = () => {
     // Filter by search term
     if (searchTerm) {
       filtered = filtered.filter(resource =>
-        resource.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        resource.description.toLowerCase().includes(searchTerm.toLowerCase())
+        resource.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        resource.description?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -98,8 +62,39 @@ const ResourceList = () => {
     setFilteredResources(filtered);
   }, [resources, searchTerm, selectedCategory, selectedStatus]);
 
-  const handleRequestCheckout = (resourceId) => {
-    toast.success(`Request submitted for ${resources.find(r => r.id === resourceId)?.name}`);
+  const handleRequestCheckout = async (resourceId) => {
+    try {
+      const resource = resources.find(r => r.id === resourceId);
+      if (!resource) {
+        toast.error('Resource not found');
+        return;
+      }
+
+      const requestData = {
+        resourceId,
+        startDate: new Date().toISOString(),
+        endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        purpose: 'General use',
+        status: 'pending'
+      };
+
+      const response = await fetch('http://localhost:5000/api/requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to submit request');
+      }
+
+      toast.success(`Request submitted for ${resource.name}`);
+    } catch (error) {
+      console.error('Failed to request checkout:', error);
+      toast.error('Failed to submit request. Please try again.');
+    }
   };
 
   const getStatusIcon = (status) => {
@@ -107,8 +102,11 @@ const ResourceList = () => {
       case 'available':
         return <CheckCircle className="h-5 w-5 text-green-500" />;
       case 'checked-out':
+      case 'borrowed':
+      case 'in-use':
         return <Clock className="h-5 w-5 text-yellow-500" />;
       case 'maintenance':
+      case 'repair':
         return <XCircle className="h-5 w-5 text-red-500" />;
       default:
         return <Package className="h-5 w-5 text-gray-500" />;
@@ -120,21 +118,58 @@ const ResourceList = () => {
       case 'available':
         return 'badge-success';
       case 'checked-out':
+      case 'borrowed':
+      case 'in-use':
         return 'badge-warning';
       case 'maintenance':
+      case 'repair':
         return 'badge-error';
       default:
         return 'badge-neutral';
     }
   };
 
-  const categories = ['all', ...new Set(resources.map(r => r.category))];
-  const statuses = ['all', 'available', 'checked-out', 'maintenance'];
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'available':
+        return 'Available';
+      case 'checked-out':
+      case 'borrowed':
+      case 'in-use':
+        return 'Checked Out';
+      case 'maintenance':
+      case 'repair':
+        return 'Maintenance';
+      default:
+        return status?.charAt(0).toUpperCase() + status?.slice(1) || 'Unknown';
+    }
+  };
+
+  const categories = ['all', ...new Set(resources.map(r => r.category).filter(Boolean))];
+  const statuses = ['all', ...new Set(resources.map(r => r.status).filter(Boolean))];
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="loading loading-spinner loading-lg"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12">
+          <Package className="h-16 w-16 text-red-400 mx-auto mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Error Loading Resources</h3>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="btn btn-primary"
+          >
+            Try Again
+          </button>
+        </div>
       </div>
     );
   }
@@ -182,7 +217,7 @@ const ResourceList = () => {
           >
             {statuses.map(status => (
               <option key={status} value={status}>
-                {status === 'all' ? 'All Status' : status.charAt(0).toUpperCase() + status.slice(1)}
+                {status === 'all' ? 'All Status' : getStatusText(status)}
               </option>
             ))}
           </select>
@@ -214,9 +249,12 @@ const ResourceList = () => {
           <div key={resource.id} className="card bg-white shadow-lg hover:shadow-xl transition-shadow">
             <figure className="h-48">
               <img
-                src={resource.image}
+                src={resource.image || 'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=300&h=200&fit=crop'}
                 alt={resource.name}
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.src = 'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=300&h=200&fit=crop';
+                }}
               />
             </figure>
             <div className="card-body">
@@ -225,7 +263,7 @@ const ResourceList = () => {
                 <div className="flex items-center">
                   {getStatusIcon(resource.status)}
                   <span className={`badge ${getStatusBadge(resource.status)} ml-2`}>
-                    {resource.status}
+                    {getStatusText(resource.status)}
                   </span>
                 </div>
               </div>
@@ -250,7 +288,7 @@ const ResourceList = () => {
                     disabled
                     className="btn btn-disabled btn-sm"
                   >
-                    {resource.status === 'checked-out' ? 'Currently Checked Out' : 'Unavailable'}
+                    {getStatusText(resource.status)}
                   </button>
                 )}
               </div>
