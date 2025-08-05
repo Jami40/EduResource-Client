@@ -6,6 +6,7 @@ import Footer from './components/Layout/Footer';
 import Login from './components/Auth/Login';
 import Signup from './components/Auth/Signup';
 import Dashboard from './components/Dashboard/Dashboard';
+import DashboardRouter from './components/Dashboard/DashboardRouter';
 import ResourceList from './components/Resources/ResourceList';
 import RequestList from './components/Requests/RequestList';
 import AdminRequests from './components/Admin/AdminRequests';
@@ -13,12 +14,16 @@ import AdminAnalytics from './components/Admin/AdminAnalytics';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
-  const { user } = useAuth();
-  
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return null; // or a spinner if you want
+  }
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  
+
   return children;
 };
 
@@ -66,7 +71,7 @@ const AppContent = () => {
         <Route path="/dashboard" element={
           <ProtectedRoute>
             <MainLayout>
-              <Dashboard />
+              <DashboardRouter />
             </MainLayout>
           </ProtectedRoute>
         } />

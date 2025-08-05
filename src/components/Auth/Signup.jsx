@@ -1,10 +1,15 @@
-import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { BookOpen, Eye, EyeOff, Upload } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const Signup = () => {
+  const { user, signup, googleSignIn } = useAuth();
+  if (user) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   const [formData, setFormData] = useState({
     displayName: '',
     email: '',
@@ -17,8 +22,15 @@ const Signup = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const { signup, googleSignIn } = useAuth();
+  const [signupSuccess, setSignupSuccess] = useState(false);
   const navigate = useNavigate();
+
+  // Navigate to dashboard when user is authenticated
+  useEffect(() => {
+    if (user && signupSuccess) {
+      navigate('/dashboard');
+    }
+  }, [user, signupSuccess, navigate]);
 
   const handleChange = (e) => {
     setFormData({
@@ -49,13 +61,15 @@ const Signup = () => {
       setLoading(true);
       await signup(formData.email, formData.password, formData.displayName, formData.role, formData.photoURL || null);
       toast.success('Account created successfully!');
-      // Small delay to ensure user state is updated
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 100);
+      setSignupSuccess(true);
+      // Navigation will happen automatically via useEffect when user state is updated
     } catch (error) {
       console.error('Signup error:', error);
-      toast.error(error.message || 'Failed to create account');
+      if (error.message === 'User already exists') {
+        toast.error('An account with this email already exists. Please try logging in instead.');
+      } else {
+        toast.error(error.message || 'Failed to create account');
+      }
     } finally {
       setLoading(false);
     }
@@ -66,13 +80,15 @@ const Signup = () => {
       setGoogleLoading(true);
       await googleSignIn();
       toast.success('Google sign-in successful!');
-      // Small delay to ensure user state is updated
-      setTimeout(() => {
-        navigate('/dashboard');
-      }, 100);
+      setSignupSuccess(true);
+      // Navigation will happen automatically via useEffect when user state is updated
     } catch (error) {
       console.error('Google sign-in error:', error);
-      toast.error(error.message || 'Failed to sign in with Google');
+      if (error.message === 'User already exists') {
+        toast.error('An account with this email already exists. Please try logging in instead.');
+      } else {
+        toast.error(error.message || 'Failed to sign in with Google');
+      }
     } finally {
       setGoogleLoading(false);
     }
@@ -142,7 +158,7 @@ const Signup = () => {
               >
                 <option value="student">Student</option>
                 <option value="faculty">Faculty</option>
-                <option value="admin">Admin</option>
+                {/* No admin option */}
               </select>
             </div>
 
