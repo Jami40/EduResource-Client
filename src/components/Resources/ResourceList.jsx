@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Search, Filter, Package, Clock, CheckCircle, XCircle } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useAuth } from '../../contexts/AuthContext';
 
 const ResourceList = () => {
+  const { user, userRole } = useAuth();
   const [resources, setResources] = useState([]);
   const [filteredResources, setFilteredResources] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -24,8 +26,22 @@ const ResourceList = () => {
         }
         
         const data = await response.json();
-        setResources(data);
-        setFilteredResources(data);
+        
+        // Filter resources based on user role
+        let filteredData = data;
+        if (userRole === 'student') {
+          filteredData = data.filter(resource => 
+            resource.reservedFor === 'student' || resource.reservedFor === 'both'
+          );
+        } else if (userRole === 'faculty') {
+          filteredData = data.filter(resource => 
+            resource.reservedFor === 'faculty' || resource.reservedFor === 'both'
+          );
+        }
+        // Admin can see all resources
+        
+        setResources(filteredData);
+        setFilteredResources(filteredData);
       } catch (err) {
         console.error('Failed to load resources:', err);
         setError('Failed to load resources. Please try again later.');
@@ -64,21 +80,26 @@ const ResourceList = () => {
 
   const handleRequestCheckout = async (resourceId) => {
     try {
-      const resource = resources.find(r => r.id === resourceId);
+      const resource = resources.find(r => r._id === resourceId);
       if (!resource) {
         toast.error('Resource not found');
         return;
       }
 
       const requestData = {
-        resourceId,
-        startDate: new Date().toISOString(),
-        endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        purpose: 'General use',
+        userId: user.uid,
+        userEmail: user.email,
+        userName: user.displayName,
+        userPhotoURL: user.photoURL,
+        userRole: userRole,
+        resourceId: resourceId,
+        resourceName: resource.name,
+        resourceCategory: resource.category,
+        requestDate: new Date().toISOString(),
         status: 'pending'
       };
 
-      const response = await fetch('http://localhost:5000/api/requests', {
+             const response = await fetch('http://localhost:3000/api/requests', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -245,17 +266,17 @@ const ResourceList = () => {
 
       {/* Resource Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredResources.map((resource) => (
-          <div key={resource.id} className="card bg-white shadow-lg hover:shadow-xl transition-shadow">
+                 {filteredResources.map((resource) => (
+           <div key={resource._id} className="card bg-white shadow-lg hover:shadow-xl transition-shadow">
             <figure className="h-48">
-              <img
-                src={resource.image || 'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=300&h=200&fit=crop'}
-                alt={resource.name}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.target.src = 'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=300&h=200&fit=crop';
-                }}
-              />
+                             <img
+                 src={resource.imageUrl || 'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=300&h=200&fit=crop'}
+                 alt={resource.name}
+                 className="w-full h-full object-cover"
+                 onError={(e) => {
+                   e.target.src = 'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=300&h=200&fit=crop';
+                 }}
+               />
             </figure>
             <div className="card-body">
               <div className="flex items-start justify-between mb-2">
@@ -276,11 +297,11 @@ const ResourceList = () => {
               </div>
 
               <div className="card-actions justify-end">
-                {resource.status === 'available' ? (
-                  <button
-                    onClick={() => handleRequestCheckout(resource.id)}
-                    className="btn btn-primary btn-sm"
-                  >
+                                 {resource.status === 'available' ? (
+                   <button
+                     onClick={() => handleRequestCheckout(resource._id)}
+                     className="btn btn-primary btn-sm"
+                   >
                     Request Checkout
                   </button>
                 ) : (
