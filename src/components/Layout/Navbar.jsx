@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import NotificationCenter from './NotificationCenter';
 import { 
   BookOpen, 
   User, 
@@ -13,7 +14,7 @@ import {
 } from 'lucide-react';
 
 const Navbar = () => {
-  const { user, signOutUser } = useAuth();
+  const { user, userRole, signOutUser } = useAuth();
   const navigate = useNavigate();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -26,13 +27,10 @@ const Navbar = () => {
     }
   };
 
-  const getRoleFromEmail = (email) => {
-    if (email.includes('admin')) return 'Admin';
-    if (email.includes('faculty')) return 'Faculty';
-    return 'Student';
+  const getDisplayRole = () => {
+    if (!userRole) return 'User';
+    return userRole.charAt(0).toUpperCase() + userRole.slice(1);
   };
-
-  const userRole = user ? getRoleFromEmail(user.email) : 'Student';
 
   return (
     <div className="navbar bg-base-100 shadow-lg">
@@ -43,10 +41,12 @@ const Navbar = () => {
           </div>
           {isMenuOpen && (
             <ul tabIndex={0} className="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
+              <li><Link to="/">Home</Link></li>
               <li><Link to="/dashboard" onClick={() => setIsMenuOpen(false)}>Dashboard</Link></li>
               <li><Link to="/resources" onClick={() => setIsMenuOpen(false)}>Resources</Link></li>
               <li><Link to="/requests" onClick={() => setIsMenuOpen(false)}>My Requests</Link></li>
-              {userRole === 'Admin' && (
+              <li><Link to="/profile" onClick={() => setIsMenuOpen(false)}>Profile</Link></li>
+              {userRole === 'admin' && (
                 <>
                   <li><Link to="/admin/requests" onClick={() => setIsMenuOpen(false)}>Manage Requests</Link></li>
                   <li><Link to="/admin/resources" onClick={() => setIsMenuOpen(false)}>Manage Resources</Link></li>
@@ -64,10 +64,12 @@ const Navbar = () => {
       
       <div className="navbar-center hidden lg:flex">
         <ul className="menu menu-horizontal px-1">
+          <li><Link to="/">Home</Link></li>
           <li><Link to="/dashboard">Dashboard</Link></li>
           <li><Link to="/resources">Resources</Link></li>
           <li><Link to="/requests">My Requests</Link></li>
-          {userRole === 'Admin' && (
+          <li><Link to="/profile">Profile</Link></li>
+          {userRole === 'admin' && (
             <>
               <li><Link to="/admin/requests">Manage Requests</Link></li>
               <li><Link to="/admin/resources">Manage Resources</Link></li>
@@ -78,6 +80,9 @@ const Navbar = () => {
       </div>
       
       <div className="navbar-end">
+        {/* Notification Center */}
+        <NotificationCenter />
+        
         <div className="dropdown dropdown-end">
           <div tabIndex={0} role="button" className="btn btn-ghost btn-circle avatar">
             <div className="w-10 rounded-full">
@@ -86,8 +91,8 @@ const Navbar = () => {
           </div>
           <ul tabIndex={0} className="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52">
             <li className="menu-title">
-                              <span className="text-sm font-semibold">{user?.displayName}</span>
-              <span className="text-xs text-gray-500">{userRole}</span>
+              <span className="text-sm font-semibold">{user?.displayName}</span>
+              <span className="text-xs text-gray-500">{getDisplayRole()}</span>
             </li>
             <li><Link to="/profile"><User size={16} /> Profile</Link></li>
             <li><Link to="/settings"><Settings size={16} /> Settings</Link></li>

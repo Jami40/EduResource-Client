@@ -11,6 +11,8 @@ import ResourceList from './components/Resources/ResourceList';
 import RequestList from './components/Requests/RequestList';
 import AdminRequests from './components/Admin/AdminRequests';
 import AdminAnalytics from './components/Admin/AdminAnalytics';
+import ProfileRouter from './components/Profile/ProfileRouter';
+import Home from './components/Home/Home';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -63,6 +65,8 @@ const AppContent = () => {
   return (
     <Router>
       <Routes>
+        {/* Home Route (public) */}
+        <Route path="/" element={<Home />} />
         {/* Public Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/signup" element={<Signup />} />
@@ -92,6 +96,14 @@ const AppContent = () => {
           </ProtectedRoute>
         } />
         
+        <Route path="/profile" element={
+          <ProtectedRoute>
+            <MainLayout>
+              <ProfileRouter />
+            </MainLayout>
+          </ProtectedRoute>
+        } />
+        
         {/* Admin Routes */}
         <Route path="/admin/requests" element={
           <AdminRoute>
@@ -109,8 +121,7 @@ const AppContent = () => {
           </AdminRoute>
         } />
         
-        {/* Default redirect */}
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        {/* Default redirect for unknown routes */}
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
       

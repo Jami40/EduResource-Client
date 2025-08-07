@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
-import AdminDashboard from './AdminDashboard';
+import FacultyProfile from './FacultyProfile';
+import StudentProfile from './StudentProfile';
+import AdminProfile from './AdminProfile';
 
-const DashboardRouter = () => {
+const ProfileRouter = () => {
   const { user, userRole } = useAuth();
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState(null);
@@ -36,11 +38,20 @@ const DashboardRouter = () => {
   }, [user, userRole]);
 
   if (!user) return <div>Loading...</div>;
-  if (loading) return <div>Loading dashboard...</div>;
+  if (loading) return <div>Loading profile...</div>;
   if (!role) return <div>User role not found.</div>;
   
-  // Use AdminDashboard for all users since it now handles role-based filtering
-  return <AdminDashboard />;
+  // Route to appropriate profile component based on role
+  switch (role) {
+    case 'admin':
+      return <AdminProfile />;
+    case 'faculty':
+      return <FacultyProfile />;
+    case 'student':
+      return <StudentProfile />;
+    default:
+      return <div>Invalid user role.</div>;
+  }
 };
 
-export default DashboardRouter;
+export default ProfileRouter; 

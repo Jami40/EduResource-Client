@@ -1,12 +1,11 @@
 // Updated server code with better error handling and logging
 // This is an improved version of your current server code
 
-const express = require('express');
-const app = express();
-const cors = require('cors');
-require('dotenv').config();
-
-const port = process.env.PORT || 3000;
+const express=require('express');
+const app=express();
+const cors=require('cors');
+require('dotenv').config()
+const port=process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
@@ -27,6 +26,7 @@ async function run() {
     const resourcesCollection = client.db("edudDb").collection("resources");
     const userCollection = client.db("edudDb").collection("users");
     const requestsCollection = client.db("edudDb").collection("requests");
+    const notificationsCollection = client.db("edudDb").collection("notifications");
 
     // Get all users
     app.get('/users', async (req, res) => {
@@ -39,26 +39,46 @@ async function run() {
       }
     });
 
-    // Get user by email
-    app.get('/users/:email', async (req, res) => {
+    // Create or update user (upsert for Google sign-in)
+    app.post('/users', async (req, res) => {
       try {
-        const email = req.params.email;
-        const user = await userCollection.findOne({ email });
-        if (!user) {
-          return res.status(404).send({ message: 'User not found' });
+        const user = req.body;
+        const query = { email: user.email };
+        const update = {
+          $set: {
+            displayName: user.displayName,
+            photoURL: user.photoURL,
+            role: user.role,
+            uid: user.uid,
+            updatedAt: new Date().toISOString(),
+          },
+          $setOnInsert: {
+            createdAt: user.createdAt || new Date().toISOString(),
+          }
+        };
+        const options = { upsert: true };
+        const result = await userCollection.updateOne(query, update, options);
+        if (result.upsertedCount > 0) {
+          res.send({ message: 'User created' });
+        } else if (result.modifiedCount > 0) {
+          res.send({ message: 'User updated' });
+        } else {
+          res.send({ message: 'User already exists' });
         }
-        res.send(user);
       } catch (error) {
-        console.error('Error fetching user:', error);
+        console.error('Error upserting user:', error);
         res.status(500).send({ message: 'Internal server error' });
       }
     });
 
-    // Update user profile
+    // Update user profile (PATCH)
     app.patch('/users/:email', async (req, res) => {
       try {
         const email = req.params.email;
         const updates = req.body;
+        if (updates.photoURL || updates.displayName) {
+          updates.updatedAt = new Date().toISOString();
+        }
         const result = await userCollection.updateOne(
           { email: email },
           { $set: updates }
@@ -74,19 +94,22 @@ async function run() {
       }
     });
 
-    // Create new user
-    app.post('/users', async (req, res) => {
+    // Get user by email (always return latest photoURL/displayName)
+    app.get('/users/:email', async (req, res) => {
       try {
-        const user = req.body;
-        const query = { email: user.email };
-        const existingUser = await userCollection.findOne(query);
-        if (existingUser) {
-          return res.send({ message: 'User already exists' });
+        const email = req.params.email;
+        const user = await userCollection.findOne({ email });
+        if (!user) {
+          return res.status(404).send({ message: 'User not found' });
         }
-        const result = await userCollection.insertOne(user);
-        res.send(result);
+        // Always return displayName and photoURL
+        res.send({
+          ...user,
+          displayName: user.displayName || '',
+          photoURL: user.photoURL || '',
+        });
       } catch (error) {
-        console.error('Error creating user:', error);
+        console.error('Error fetching user:', error);
         res.status(500).send({ message: 'Internal server error' });
       }
     });
@@ -190,6 +213,14 @@ async function run() {
       try {
         const id = req.params.id;
         const updates = req.body;
+        
+        // If approving, add due date if not provided
+        if (updates.status === 'approved' && !updates.dueDate) {
+          const dueDate = new Date();
+          dueDate.setDate(dueDate.getDate() + 14); // Default 14 days
+          updates.dueDate = dueDate.toISOString();
+        }
+
         const result = await requestsCollection.updateOne(
           { _id: new ObjectId(id) },
           { $set: updates }
@@ -201,6 +232,157 @@ async function run() {
         }
       } catch (error) {
         console.error('Error updating request:', error);
+        res.status(500).send({ message: 'Internal server error' });
+      }
+    });
+
+    // Mark item as returned
+    app.patch('/api/requests/:id/return', async (req, res) => {
+      try {
+        const id = req.params.id;
+        const updates = req.body;
+        updates.status = 'returned';
+        
+        const result = await requestsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: updates }
+        );
+        if (result.modifiedCount > 0) {
+          res.send({ message: 'Item marked as returned successfully' });
+        } else {
+          res.status(404).send({ message: 'Request not found' });
+        }
+      } catch (error) {
+        console.error('Error marking item as returned:', error);
+        res.status(500).send({ message: 'Internal server error' });
+      }
+    });
+
+    // Get usage history
+    app.get('/api/usage-history', async (req, res) => {
+      try {
+        const history = await requestsCollection.find({}).sort({ requestDate: -1 }).toArray();
+        res.send(history);
+      } catch (error) {
+        console.error('Error fetching usage history:', error);
+        res.status(500).send({ message: 'Internal server error' });
+      }
+    });
+
+    // Get usage history for specific user
+    app.get('/api/usage-history/user/:email', async (req, res) => {
+      try {
+        const email = req.params.email;
+        const history = await requestsCollection.find({ userEmail: email }).sort({ requestDate: -1 }).toArray();
+        res.send(history);
+      } catch (error) {
+        console.error('Error fetching user usage history:', error);
+        res.status(500).send({ message: 'Internal server error' });
+      }
+    });
+
+    // Get overdue items
+    app.get('/api/overdue-items', async (req, res) => {
+      try {
+        const today = new Date();
+        const overdueItems = await requestsCollection.find({
+          status: 'approved',
+          dueDate: { $lt: today.toISOString() },
+          returnedAt: { $exists: false }
+        }).toArray();
+        res.send(overdueItems);
+      } catch (error) {
+        console.error('Error fetching overdue items:', error);
+        res.status(500).send({ message: 'Internal server error' });
+      }
+    });
+
+    // Get overdue items for specific user
+    app.get('/api/overdue-items/user/:email', async (req, res) => {
+      try {
+        const email = req.params.email;
+        const today = new Date();
+        const overdueItems = await requestsCollection.find({
+          userEmail: email,
+          status: 'approved',
+          dueDate: { $lt: today.toISOString() },
+          returnedAt: { $exists: false }
+        }).toArray();
+        res.send(overdueItems);
+      } catch (error) {
+        console.error('Error fetching user overdue items:', error);
+        res.status(500).send({ message: 'Internal server error' });
+      }
+    });
+
+    // Send notification
+    app.post('/api/notifications', async (req, res) => {
+      try {
+        const notification = req.body;
+        const result = await notificationsCollection.insertOne(notification);
+        res.send(result);
+      } catch (error) {
+        console.error('Error sending notification:', error);
+        res.status(500).send({ message: 'Internal server error' });
+      }
+    });
+
+    // Get notifications for user
+    app.get('/api/notifications/user/:userId', async (req, res) => {
+      try {
+        const userId = req.params.userId;
+        const notifications = await notificationsCollection.find({ userId }).sort({ sentAt: -1 }).toArray();
+        res.send(notifications);
+      } catch (error) {
+        console.error('Error fetching notifications:', error);
+        res.status(500).send({ message: 'Internal server error' });
+      }
+    });
+
+    // Mark notification as read
+    app.patch('/api/notifications/:id/read', async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await notificationsCollection.updateOne(
+          { _id: new ObjectId(id) },
+          { $set: { read: true, readAt: new Date().toISOString() } }
+        );
+        if (result.modifiedCount > 0) {
+          res.send({ message: 'Notification marked as read' });
+        } else {
+          res.status(404).send({ message: 'Notification not found' });
+        }
+      } catch (error) {
+        console.error('Error marking notification as read:', error);
+        res.status(500).send({ message: 'Internal server error' });
+      }
+    });
+
+    // Get dashboard statistics
+    app.get('/api/dashboard-stats', async (req, res) => {
+      try {
+        const totalResources = await resourcesCollection.countDocuments();
+        const pendingRequests = await requestsCollection.countDocuments({ status: 'pending' });
+        const activeLoans = await requestsCollection.countDocuments({ 
+          status: 'approved', 
+          returnedAt: { $exists: false } 
+        });
+        
+        const today = new Date();
+        const overdueItems = await requestsCollection.countDocuments({
+          status: 'approved',
+          dueDate: { $lt: today.toISOString() },
+          returnedAt: { $exists: false }
+        });
+
+        res.send({
+          totalResources,
+          pendingRequests,
+          activeLoans,
+          overdueItems
+        });
+      } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
         res.status(500).send({ message: 'Internal server error' });
       }
     });
@@ -221,12 +403,17 @@ app.get('/', (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(`🎯 Edu resource server running on port ${port}`);
+  console.log(`Edu resource running on port ${port}`);
 });
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log('🛑 Shutting down server...');
-  await client.close();
-  process.exit(0);
+  try {
+    await client.close();
+    console.log('MongoDB connection closed.');
+    process.exit(0);
+  } catch (error) {
+    console.error('Error during shutdown:', error);
+    process.exit(1);
+  }
 }); 

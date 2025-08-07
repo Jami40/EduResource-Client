@@ -12,73 +12,45 @@ import {
 import toast from 'react-hot-toast';
 
 const RequestList = () => {
-  const { user } = useAuth();
+  const { user, userRole } = useAuth();
   const [requests, setRequests] = useState([]);
   const [filteredRequests, setFilteredRequests] = useState([]);
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [loading, setLoading] = useState(true);
 
-  // Mock data - replace with API call
+  // Fetch requests based on user role
   useEffect(() => {
-    const mockRequests = [
-      {
-        id: 1,
-        resourceName: 'Projector Epson EX3260',
-        resourceId: 1,
-        status: 'pending',
-        requestDate: '2024-01-15',
-        startDate: '2024-01-20',
-        endDate: '2024-01-22',
-        duration: '2 days',
-        purpose: 'Class presentation for Computer Science 101',
-        adminNotes: '',
-        image: 'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=300&h=200&fit=crop'
-      },
-      {
-        id: 2,
-        resourceName: 'Laptop Dell XPS 13',
-        resourceId: 2,
-        status: 'approved',
-        requestDate: '2024-01-10',
-        startDate: '2024-01-15',
-        endDate: '2024-01-22',
-        duration: '1 week',
-        purpose: 'Research project development',
-        adminNotes: 'Approved for academic research',
-        image: 'https://images.unsplash.com/photo-1496181133206-80ce9b88a853?w=300&h=200&fit=crop'
-      },
-      {
-        id: 3,
-        resourceName: 'Microscope Olympus',
-        resourceId: 3,
-        status: 'rejected',
-        requestDate: '2024-01-08',
-        startDate: '2024-01-12',
-        endDate: '2024-01-15',
-        duration: '3 days',
-        purpose: 'Biology lab experiment',
-        adminNotes: 'Equipment currently under maintenance',
-        image: 'https://images.unsplash.com/photo-1576086213369-97a306d36557?w=300&h=200&fit=crop'
-      },
-      {
-        id: 4,
-        resourceName: 'Camera Canon EOS R5',
-        resourceId: 6,
-        status: 'active',
-        requestDate: '2024-01-05',
-        startDate: '2024-01-10',
-        endDate: '2024-01-17',
-        duration: '1 week',
-        purpose: 'Photography workshop',
-        adminNotes: 'Currently checked out',
-        image: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=300&h=200&fit=crop'
+    const fetchRequests = async () => {
+      try {
+        setLoading(true);
+        let url = 'http://localhost:3000/api/requests';
+        
+        // If user is faculty or student, fetch only their requests
+        if (userRole === 'faculty' || userRole === 'student') {
+          url = `http://localhost:3000/api/requests/user/${user?.email}`;
+        }
+        
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          setRequests(data);
+          setFilteredRequests(data);
+        } else {
+          console.error('Failed to fetch requests');
+          toast.error('Failed to fetch requests');
+        }
+      } catch (error) {
+        console.error('Error fetching requests:', error);
+        toast.error('Error fetching requests');
+      } finally {
+        setLoading(false);
       }
-    ];
+    };
 
-    setRequests(mockRequests);
-    setFilteredRequests(mockRequests);
-    setLoading(false);
-  }, []);
+    if (user?.email) {
+      fetchRequests();
+    }
+  }, [user, userRole]);
 
   useEffect(() => {
     if (selectedStatus === 'all') {
@@ -88,22 +60,59 @@ const RequestList = () => {
     }
   }, [requests, selectedStatus]);
 
-  const handleCancelRequest = (requestId) => {
-    setRequests(requests.map(request => 
-      request.id === requestId 
-        ? { ...request, status: 'cancelled' }
-        : request
-    ));
-    toast.success('Request cancelled successfully');
+  const handleCancelRequest = async (requestId) => {
+    try {
+      const response = await fetch(`http://localhost:3000/api/requests/${requestId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: 'cancelled' }),
+      });
+
+      if (response.ok) {
+        setRequests(requests.map(request => 
+          request._id === requestId 
+            ? { ...request, status: 'cancelled' }
+            : request
+        ));
+        toast.success('Request cancelled successfully');
+      } else {
+        toast.error('Failed to cancel request');
+      }
+    } catch (error) {
+      console.error('Error cancelling request:', error);
+      toast.error('Error cancelling request');
+    }
   };
 
-  const handleReturnResource = (requestId) => {
-    setRequests(requests.map(request => 
-      request.id === requestId 
-        ? { ...request, status: 'returned' }
-        : request
-    ));
-    toast.success('Resource returned successfully');
+  const handleReturnResource = async (requestId) => {
+    try {
+      const response = await fetch(`http://localhost:3000/api/requests/${requestId}/return`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          returnedAt: new Date().toISOString(),
+          returnedBy: user?.email 
+        }),
+      });
+
+      if (response.ok) {
+        setRequests(requests.map(request => 
+          request._id === requestId 
+            ? { ...request, status: 'returned', returnedAt: new Date().toISOString() }
+            : request
+        ));
+        toast.success('Resource returned successfully');
+      } else {
+        toast.error('Failed to return resource');
+      }
+    } catch (error) {
+      console.error('Error returning resource:', error);
+      toast.error('Error returning resource');
+    }
   };
 
   const getStatusIcon = (status) => {
@@ -163,6 +172,37 @@ const RequestList = () => {
     }
   };
 
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  const getPageTitle = () => {
+    switch (userRole) {
+      case 'admin':
+        return 'All Requests';
+      case 'faculty':
+        return 'My Requests';
+      case 'student':
+        return 'My Requests';
+      default:
+        return 'Requests';
+    }
+  };
+
+  const getPageSubtitle = () => {
+    switch (userRole) {
+      case 'admin':
+        return 'Manage all resource checkout requests';
+      case 'faculty':
+        return 'Track your resource checkout requests';
+      case 'student':
+        return 'Track your resource checkout requests';
+      default:
+        return 'Track resource checkout requests';
+    }
+  };
+
   const statuses = ['all', 'pending', 'approved', 'rejected', 'active', 'returned', 'cancelled'];
 
   if (loading) {
@@ -176,8 +216,8 @@ const RequestList = () => {
   return (
     <div className="p-6">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">My Requests</h1>
-        <p className="text-gray-600">Track your resource checkout requests</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">{getPageTitle()}</h1>
+        <p className="text-gray-600">{getPageSubtitle()}</p>
       </div>
 
       {/* Filter */}
@@ -206,12 +246,12 @@ const RequestList = () => {
       {/* Requests Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {filteredRequests.map((request) => (
-          <div key={request.id} className="card bg-white shadow-lg">
+          <div key={request._id} className="card bg-white shadow-lg">
             <div className="card-body">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center space-x-3">
                   <img
-                    src={request.image}
+                    src={request.resourceImageUrl || 'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?w=300&h=200&fit=crop'}
                     alt={request.resourceName}
                     className="w-16 h-16 object-cover rounded-lg"
                   />
@@ -228,29 +268,49 @@ const RequestList = () => {
               </div>
 
               <div className="space-y-3">
+                {/* Show user info only for admin */}
+                {userRole === 'admin' && (
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <div className="flex items-center space-x-2">
+                      <User className="h-4 w-4 text-gray-500" />
+                      <span className="text-sm font-medium text-gray-700">Requested by:</span>
+                    </div>
+                    <div className="mt-1 text-sm text-gray-600">
+                      <p>{request.userName} ({request.userEmail})</p>
+                      <p className="text-xs text-gray-500">Role: {request.userRole}</p>
+                    </div>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-gray-500">Request Date:</span>
-                    <p className="font-medium">{request.requestDate}</p>
+                    <p className="font-medium">{formatDate(request.requestDate)}</p>
                   </div>
+                  {request.dueDate && (
+                    <div>
+                      <span className="text-gray-500">Due Date:</span>
+                      <p className="font-medium">{formatDate(request.dueDate)}</p>
+                    </div>
+                  )}
+                  {request.returnedAt && (
+                    <div>
+                      <span className="text-gray-500">Returned Date:</span>
+                      <p className="font-medium">{formatDate(request.returnedAt)}</p>
+                    </div>
+                  )}
                   <div>
-                    <span className="text-gray-500">Duration:</span>
-                    <p className="font-medium">{request.duration}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">Start Date:</span>
-                    <p className="font-medium">{request.startDate}</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-500">End Date:</span>
-                    <p className="font-medium">{request.endDate}</p>
+                    <span className="text-gray-500">Resource Category:</span>
+                    <p className="font-medium">{request.resourceCategory || 'N/A'}</p>
                   </div>
                 </div>
 
-                <div>
-                  <span className="text-gray-500 text-sm">Purpose:</span>
-                  <p className="text-sm mt-1">{request.purpose}</p>
-                </div>
+                {request.purpose && (
+                  <div>
+                    <span className="text-gray-500 text-sm">Purpose:</span>
+                    <p className="text-sm mt-1">{request.purpose}</p>
+                  </div>
+                )}
 
                 {request.adminNotes && (
                   <div>
@@ -262,16 +322,16 @@ const RequestList = () => {
                 <div className="card-actions justify-end pt-4">
                   {request.status === 'pending' && (
                     <button
-                      onClick={() => handleCancelRequest(request.id)}
+                      onClick={() => handleCancelRequest(request._id)}
                       className="btn btn-outline btn-sm btn-error"
                     >
                       Cancel Request
                     </button>
                   )}
                   
-                  {request.status === 'active' && (
+                  {request.status === 'approved' && !request.returnedAt && (
                     <button
-                      onClick={() => handleReturnResource(request.id)}
+                      onClick={() => handleReturnResource(request._id)}
                       className="btn btn-primary btn-sm"
                     >
                       Return Resource
@@ -290,7 +350,9 @@ const RequestList = () => {
           <h3 className="text-lg font-medium text-gray-900 mb-2">No requests found</h3>
           <p className="text-gray-600">
             {selectedStatus === 'all' 
-              ? "You haven't made any requests yet. Browse resources to get started!"
+              ? userRole === 'admin' 
+                ? "No requests have been made yet."
+                : "You haven't made any requests yet. Browse resources to get started!"
               : `No ${selectedStatus} requests found.`
             }
           </p>
